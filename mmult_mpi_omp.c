@@ -26,6 +26,9 @@ int main(int argc, char* argv[])
   double starttime, endtime;
   MPI_Status status;
   /* insert other global variables here */
+  double *strp_buffer;
+  int strp_size = (nrows * ncols) / numprocs;
+  int strp_number;
   MPI_Init(&argc, &argv);
   MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
   MPI_Comm_rank(MPI_COMM_WORLD, &myid);
@@ -36,9 +39,29 @@ int main(int argc, char* argv[])
       // Master Code goes here
       aa = gen_matrix(nrows, ncols);
       bb = gen_matrix(ncols, nrows);
-      cc1 = malloc(sizeof(double) * nrows * nrows); 
+      cc1 = malloc(sizeof(double) * nrows * nrows);
       starttime = MPI_Wtime();
       /* Insert your master code here to store the product into cc1 */
+
+      // Stripe the A matrix and distribute stripes.
+      strp_buffer = malloc(sizeof(double) * strp_size);
+      int strp_sent = 0;
+
+      MPI_Bcast(bb, nrows * ncols, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+      int i, j;
+      for(i = 0; i < min(ncols, numprocs); i++) {
+         for(j = 0; j < strp_size; j++) {
+             strp_buffer[j] = aa[i * strp_size + j];
+         }
+         MPI_Send(strp_buffer, strp_size, MPI_DOUBLE, i+1, i+1, MPI_COMM_WORLD);
+         strp_sent++;
+      }
+      // Complete personal As x B calculation
+
+      // Receive Stripes
+
+      // Assemble final matrix
+
       endtime = MPI_Wtime();
       printf("%f\n",(endtime - starttime));
       cc2  = malloc(sizeof(double) * nrows * nrows);
@@ -46,6 +69,15 @@ int main(int argc, char* argv[])
       compare_matrices(cc2, cc1, nrows, nrows);
     } else {
       // Slave Code goes here
+      MPI_Bcast(bb, nrows * ncols, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+      // Receive my A Stripe
+      MPI_Recv(strp_buffer, strp_size, MPI_DOUBLE, 0, MPI_ANY_TAG,
+               MPI_COMM_WORLD, &status);
+
+      strp_number = status.MPI_TAG;
+      // Complete personal As x B calculation
+
+      // Send calculation back to Master
     }
   } else {
     fprintf(stderr, "Usage matrix_times_vector <size>\n");

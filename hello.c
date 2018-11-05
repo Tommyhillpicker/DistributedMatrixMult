@@ -11,7 +11,7 @@ int main (int argc, char* argv[]) {
   gethostname(me, 254);
   printf("Hello from %s I am process %d of %d\n", me, myid, numprocs);
   if (myid == 0) {
-    n = 12345;
+    n = 1337;
   }
   printf("Call to MPI_Bcast n==%d on %s myid=%d\n", n, me, myid);
   MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
