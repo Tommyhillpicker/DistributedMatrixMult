@@ -49,16 +49,36 @@ int main(int argc, char* argv[])
       int strp_sent = 0;
 
       MPI_Bcast(bb, nrows * ncols, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-      int i, j;
+      // Send the evenly divisible stripes; i controls which stripe, j controls position within the stripe
+      int i, j, k;
       for(i = 0; i < min(ncols, numprocs); i++) {
-         for(j = 0; j < strp_rows; j++) {
-             strp_buffer[j] = aa[i * strp_rows + j];
+         for(j = 0; j < strp_rows * numcols; j++) {
+             strp_buffer[j] = aa[(i * strp_rows * ncols) + j];
          }
-         MPI_Send(strp_buffer, strp_rows, MPI_DOUBLE, i+1, i+1, MPI_COMM_WORLD);
+         MPI_Send(strp_buffer, strp_rows * ncols, MPI_DOUBLE, i+1, i+1, MPI_COMM_WORLD);
          strp_sent++;
       }
 
+      //Handle any remaining rows as its own smaller stripe
+      if((strp_sent * strp_rows) < nrows) {
+        //Clear the stripe buffer, important for when we receive the smaller stripe once more
+        for(j = 0; j < strp_rows * ncols; j++) {
+           strp_buffer[j] = 0;
+        }
+
+         for(j = 0, k = (i * strp_rows * ncols); k < (nrows * ncols); j++, k++) {
+             strp_buffer[j] = aa[k];
+         }
+
+         MPI_Send(strp_buffer, j, MPI_DOUBLE, i+1, i+1, MPI_COMM_WORLD);
+         strp_sent++;
+      }
       // Receive Stripes
+      for(i = 0; i < strp_sent; i++) {
+         MPI_Recv(&cc1, strp_rows * ncols, MPI_DOUBLE, MPI_ANY_SOURCE,
+                  MPI_COMM_WORLD, &status);
+
+      }
 
       // Assemble final matrix
 
