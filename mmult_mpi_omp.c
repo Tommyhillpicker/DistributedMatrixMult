@@ -27,7 +27,8 @@ int main(int argc, char* argv[])
   double starttime, endtime;
   MPI_Status status;
   /* insert other global variables here */
-  double *strp_buffer, strp_ret;
+  double *strp_buffer;
+  double *strp_ret;
   int strp_rows = nrows / numprocs;
   int strp_number;
   MPI_Init(&argc, &argv);
@@ -52,7 +53,7 @@ int main(int argc, char* argv[])
       // Send the evenly divisible stripes; i controls which stripe, j controls position within the stripe
       int i, j, k;
       for(i = 0; i < min(ncols, numprocs); i++) {
-         for(j = 0; j < strp_rows * numcols; j++) {
+         for(j = 0; j < strp_rows * ncols; j++) {
              strp_buffer[j] = aa[(i * strp_rows * ncols) + j];
          }
          MPI_Send(strp_buffer, strp_rows * ncols, MPI_DOUBLE, i+1, i+1, MPI_COMM_WORLD);
@@ -75,7 +76,7 @@ int main(int argc, char* argv[])
       }
       // Receive Stripes
       for(i = 0; i < strp_sent; i++) {
-         MPI_Recv(&cc1, strp_rows * ncols, MPI_DOUBLE, MPI_ANY_SOURCE,
+         MPI_Recv(&cc1, strp_rows * ncols, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG,
                   MPI_COMM_WORLD, &status);
 
       }
@@ -89,20 +90,22 @@ int main(int argc, char* argv[])
       compare_matrices(cc2, cc1, nrows, nrows);
     } else {
       // Slave Code goes here
-      MPI_Bcast(bb, nrows * ncols, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-      // Receive my A Stripe
-      MPI_Recv(strp_buffer, strp_rows, MPI_DOUBLE, 0, MPI_ANY_TAG,
-               MPI_COMM_WORLD, &status);
+      while(1) {
+         MPI_Bcast(bb, nrows * ncols, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+         // Receive my A Stripe
+         MPI_Recv(strp_buffer, strp_rows, MPI_DOUBLE, 0, MPI_ANY_TAG,
+                  MPI_COMM_WORLD, &status);
 
-      strp_number = status.MPI_TAG;
-      strp_ret = malloc(sizeof(double) * strp_rows * ncols);
-      // Complete personal As x B calculation
+         strp_number = status.MPI_TAG;
+         strp_ret = malloc(sizeof(double) * strp_rows * ncols);
+         // Complete personal As x B calculation
 #pragma omp parallel
 #pragma omp shared(strp_ret) for reduction(+:strp_ret)
-      mmult(strp_ret, strp_buffer, strp_rows, ncols, bb, ncols, nrows); 
-      // Send calculation back to Master
-      MPI_Send(&strp_ret, strp_rows * ncols, MPI_DOUBLE, 0,
-               strp_number, MPI_COMM_WORLD);
+         mmult(strp_ret, strp_buffer, strp_rows, ncols, bb, ncols, nrows); 
+         // Send calculation back to Master
+         MPI_Send(&strp_ret, strp_rows * ncols, MPI_DOUBLE, 0,
+                  strp_number, MPI_COMM_WORLD);
+      }
     }
   } else {
     fprintf(stderr, "Usage matrix_times_vector <size>\n");
