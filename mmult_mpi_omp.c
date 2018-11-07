@@ -74,14 +74,11 @@ int main(int argc, char* argv[])
          MPI_Send(strp_buffer, j, MPI_DOUBLE, i+1, i+1, MPI_COMM_WORLD);
          strp_sent++;
       }
-      // Receive Stripes
+      // Receive Stripes, assemble final matrix
       for(i = 0; i < strp_sent; i++) {
          MPI_Recv(&cc1, strp_rows * ncols, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG,
                   MPI_COMM_WORLD, &status);
-
       }
-
-      // Assemble final matrix
 
       endtime = MPI_Wtime();
       printf("%f\n",(endtime - starttime));
@@ -90,11 +87,16 @@ int main(int argc, char* argv[])
       compare_matrices(cc2, cc1, nrows, nrows);
     } else {
       // Slave Code goes here
+      // Loop indefinitely, constatntly receiving stripes while there are any
       while(1) {
          MPI_Bcast(bb, nrows * ncols, MPI_DOUBLE, 0, MPI_COMM_WORLD);
          // Receive my A Stripe
          MPI_Recv(strp_buffer, strp_rows, MPI_DOUBLE, 0, MPI_ANY_TAG,
                   MPI_COMM_WORLD, &status);
+
+         //Break when there are no more stripes to read
+         if(status.MPI_TAG == 0)
+            break;
 
          strp_number = status.MPI_TAG;
          strp_ret = malloc(sizeof(double) * strp_rows * ncols);
